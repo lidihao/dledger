@@ -131,10 +131,12 @@ public class DLedgerServer extends AbstractDLedgerServer {
         dLedgerConfig.init();
         this.dLedgerConfig = dLedgerConfig;
         this.memberState = new MemberState(dLedgerConfig);
+        // 日志存储器
         this.dLedgerStore = createDLedgerStore(dLedgerConfig.getStoreType(), this.dLedgerConfig, this.memberState);
         this.dLedgerRpcService = new DLedgerRpcNettyService(this, nettyServerConfig, nettyClientConfig, channelEventListener);
         this.rpcServiceMode = RpcServiceMode.EXCLUSIVE;
         this.dLedgerEntryPusher = new DLedgerEntryPusher(dLedgerConfig, memberState, dLedgerStore, dLedgerRpcService);
+        // 负责节点选择
         this.dLedgerLeaderElector = new DLedgerLeaderElector(dLedgerConfig, memberState, dLedgerRpcService);
         this.executorService = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(null, "DLedgerServer-ScheduledExecutor", true));
         if (stateMachine == null) {

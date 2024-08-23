@@ -18,14 +18,19 @@ package io.openmessaging.storage.dledger.protocol;
 
 public class RequestOrResponse {
 
+    // 服务器组
     protected String group;
+    // 远程节点id
     protected String remoteId;
+    // 本地节点id
     protected String localId;
 
     protected int code = DLedgerResponseCode.SUCCESS.getCode();
 
+    // 当前节点认为的leaderId
     protected String leaderId = null;
 
+    // 当前服务器的term
     protected long term = -1;
 
     public String getGroup() {

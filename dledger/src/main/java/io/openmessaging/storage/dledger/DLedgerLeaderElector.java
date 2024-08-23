@@ -48,6 +48,7 @@ public class DLedgerLeaderElector {
 
     private final Random random = new Random();
     private final DLedgerConfig dLedgerConfig;
+    // 节点状态
     private final MemberState memberState;
     private final DLedgerRpcService dLedgerRpcService;
 
@@ -59,16 +60,20 @@ public class DLedgerLeaderElector {
     private int heartBeatTimeIntervalMs = 2000;
     private int maxHeartBeatLeak = 3;
     //as a client
+    // 下一次投票时间
     private long nextTimeToRequestVote = -1;
+    // 是否立即增大term是遇到比自己大的term才设置为true
     private volatile boolean needIncreaseTermImmediately = false;
+    // 最小投票间隔
     private int minVoteIntervalMs = 300;
+    // 最大投票间隔
     private int maxVoteIntervalMs = 1000;
 
     private final List<RoleChangeHandler> roleChangeHandlers = new ArrayList<>();
 
     private VoteResponse.ParseResult lastParseResult = VoteResponse.ParseResult.WAIT_TO_REVOTE;
     private long lastVoteCost = 0L;
-
+    // 是一个线程，维持状态
     private final StateMaintainer stateMaintainer;
 
     private final TakeLeadershipTask takeLeadershipTask = new TakeLeadershipTask();
@@ -195,15 +200,19 @@ public class DLedgerLeaderElector {
     public CompletableFuture<VoteResponse> handleVote(VoteRequest request, boolean self) {
         //hold the lock to get the latest term, leaderId, ledgerEndIndex
         synchronized (memberState) {
+            // 节点不存在
             if (!memberState.isPeerMember(request.getLeaderId())) {
                 LOGGER.warn("[BUG] [HandleVote] remoteId={} is an unknown member", request.getLeaderId());
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_UNKNOWN_LEADER));
             }
+
+
             if (!self && memberState.getSelfId().equals(request.getLeaderId())) {
                 LOGGER.warn("[BUG] [HandleVote] selfId={} but remoteId={}", memberState.getSelfId(), request.getLeaderId());
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_UNEXPECTED_LEADER));
             }
 
+            // 当前term比投票的term大
             if (request.getLedgerEndTerm() < memberState.getLedgerEndTerm()) {
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_EXPIRED_LEDGER_TERM));
             } else if (request.getLedgerEndTerm() == memberState.getLedgerEndTerm() && request.getLedgerEndIndex() < memberState.getLedgerEndIndex()) {
@@ -225,6 +234,7 @@ public class DLedgerLeaderElector {
                     }
                 }
             } else {
+                //遇到比自己大的term，则将term变更为当前最大的term，回复term_not_ready
                 //stepped down by larger term
                 changeRoleToCandidate(request.getTerm());
                 needIncreaseTermImmediately = true;
@@ -274,13 +284,13 @@ public class DLedgerLeaderElector {
                         case SUCCESS:
                             succNum.incrementAndGet();
                             break;
-                        case EXPIRED_TERM:
+                        case EXPIRED_TERM: //如果发现新加入的节点比自己的term大，则当前leader变成candidate，重新选举一次，出现这种请求，是一个节点因为网络不通，很久没有连上leader，导致一致在选举，term一直增大
                             maxTerm.set(x.getTerm());
                             break;
                         case INCONSISTENT_LEADER:
                             inconsistLeader.compareAndSet(false, true);
                             break;
-                        case TERM_NOT_READY:
+                        case TERM_NOT_READY: //当follow的term小于当前leader，会让follow将term切换成当前节点
                             notReadyNum.incrementAndGet();
                             break;
                         default:
@@ -311,6 +321,7 @@ public class DLedgerLeaderElector {
         Thread.sleep(voteResultWaitTime);
 
         //abnormal case, deal with it immediately
+        // 字节点的term比自己大，立刻转成候选节点，开始选举
         if (maxTerm.get() > term) {
             LOGGER.warn("[{}] currentTerm{} is not the biggest={}, deal with it", memberState.getSelfId(), term, maxTerm.get());
             changeRoleToCandidate(maxTerm.get());
@@ -360,6 +371,7 @@ public class DLedgerLeaderElector {
         }
     }
 
+    //对所有服务器发起投票节点
     private List<CompletableFuture<VoteResponse>> voteForQuorumResponses(long term, long ledgerEndTerm,
                                                                          long ledgerEndIndex) throws Exception {
         List<CompletableFuture<VoteResponse>> responses = new ArrayList<>();
@@ -409,10 +421,13 @@ public class DLedgerLeaderElector {
         long term;
         long ledgerEndTerm;
         long ledgerEndIndex;
+        // 不是候选者
         if (!memberState.isCandidate()) {
             return;
         }
+        // 状态的变更需要线程同步
         synchronized (memberState) {
+            // double check
             if (!memberState.isCandidate()) {
                 return;
             }
@@ -424,9 +439,11 @@ public class DLedgerLeaderElector {
             } else {
                 term = memberState.currTerm();
             }
+            //
             ledgerEndIndex = memberState.getLedgerEndIndex();
             ledgerEndTerm = memberState.getLedgerEndTerm();
         }
+        // 如果遇到比自己term大的投票请求立马增大term
         if (needIncreaseTermImmediately) {
             nextTimeToRequestVote = getNextTimeToRequestVote();
             needIncreaseTermImmediately = false;
@@ -712,7 +729,9 @@ public class DLedgerLeaderElector {
         public void doWork() {
             try {
                 if (DLedgerLeaderElector.this.dLedgerConfig.isEnableLeaderElector()) {
+                    // 刷新配置
                     DLedgerLeaderElector.this.refreshIntervals(dLedgerConfig);
+                    // 状态变更
                     DLedgerLeaderElector.this.maintainState();
                 }
                 sleep(10);

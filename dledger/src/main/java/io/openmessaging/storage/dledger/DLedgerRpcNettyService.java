@@ -192,6 +192,7 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
                     }
                 });
             } catch (Throwable t) {
+                //抛异常, code 是UNKONWN
                 LOGGER.error("Send vote request failed, {}", request.baseInfo(), t);
                 future.complete(new VoteResponse());
             }

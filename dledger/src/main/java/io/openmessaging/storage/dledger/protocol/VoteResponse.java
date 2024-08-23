@@ -53,11 +53,11 @@ public class VoteResponse extends RequestOrResponse {
         ACCEPT,
         REJECT_UNKNOWN_LEADER,
         REJECT_UNEXPECTED_LEADER,
-        REJECT_EXPIRED_VOTE_TERM,
-        REJECT_ALREADY_VOTED,
-        REJECT_ALREADY_HAS_LEADER,
-        REJECT_TERM_NOT_READY,
-        REJECT_TERM_SMALL_THAN_LEDGER,
+        REJECT_EXPIRED_VOTE_TERM, //投票的请求term小于当前服务器的请求
+        REJECT_ALREADY_VOTED,  // 已经投票了
+        REJECT_ALREADY_HAS_LEADER, //当前状态是FOLLOW，已经有主节点
+        REJECT_TERM_NOT_READY, // 当前term过小，等待下轮增大自己的term
+        REJECT_TERM_SMALL_THAN_LEDGER, //当前term比日志term要晓
         REJECT_EXPIRED_LEDGER_TERM,
         REJECT_SMALL_LEDGER_END_INDEX,
         REJECT_TAKING_LEADERSHIP;

@@ -18,8 +18,10 @@ package io.openmessaging.storage.dledger.protocol;
 
 public class VoteRequest extends RequestOrResponse {
 
+    // 日志最大idx
     private long ledgerEndIndex = -1;
 
+    //日志最大的term
     private long ledgerEndTerm = -1;
 
     public long getLedgerEndIndex() {
